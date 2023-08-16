@@ -592,7 +592,7 @@ sortedSpeakers.forEach((speaker, index) => {
                 .style("max-height", height - contentGap * 2);
 
             let tooltipText = "<b>Speaker:</b> " + speaker + "<br/>" + 
-					"<b>Year:</b> " + d.bin_date.toLocaleDateString("en-au", { year:"numeric", month:"short", day:"numeric"}) + "<br/>" + 
+					"<b>Date:</b> " + d.bin_date.toLocaleDateString("en-au", { year:"numeric", month:"short", day:"numeric"}) + "<br/>" + 
 					"<b>Mean Diff: </b>" + d.mean.toFixed(2) + "<br/>" + 
                     "<b>Speech Snippet Count: </b>" + d.GroupCount;
             if (d.highestSpeech !== undefined)
