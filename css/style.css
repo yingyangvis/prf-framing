@@ -1,0 +1,35 @@
+.label, .valueLineLabel {
+    font: 14px sans-serif;
+}
+.axisLabel {
+    font: 10px sans-serif;
+}
+.tick text {
+    font: 12px sans-serif;
+}
+
+.circle-highlighted {
+    stroke-width: 3;
+}
+
+#user-guide {
+    position: absolute;
+    background-color: white;
+    padding: 0px 15px 0px 15px;
+    border: 1px solid #555;
+}
+#user-guide-text {
+    font: 16px sans-serif;
+}
+
+#tooltip-container {
+    position: absolute;
+    background-color: white;
+    padding: 0px 15px 0px 15px;
+    display: none;
+    border: 1px solid #555;
+    overflow-y: auto;
+}
+#tooltip-text {
+    font: 16px sans-serif;
+}
