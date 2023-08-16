@@ -45,15 +45,27 @@ const metroMapColours = ["#009E73", "#94BDAC", "#DC829C", "#565984", "#018AC8", 
 
 // load data
 const speechData = await d3.json("data/with_jensen_garrett_abbott_climate_climate_change_pms_curie_2_-1.json");
-const diffData = await d3.csv("data/with_jensen_garrett_abbott_climate_climate_change_pms_curie_2_-1_summary_table.csv");
+const diffData = await d3.csv("data/with_jensen_garrett_abbott_climate_climate_change_pms_curie_2_-1_summary_table_dynamic.csv");
 const electionData = await d3.csv("data/federal_elections.csv");
 const pmData = await d3.csv("data/prime_minister_terms.csv");
 
 // process data
+let dateIntervals = [...new Set(diffData.map(d => d.record_date))];
+dateIntervals = dateIntervals.map(d => d3.timeParse("%d-%b-%Y")(d)).sort(sortByDate);
+
 let speakers = {};
 speechData.forEach(d => {
 	d.date = d3.timeParse("%Y-%m-%d")(d.date);
-    const speechYear = d.date.getFullYear();
+
+    let key;
+    dateIntervals.every(bin => {
+        if (bin >= d.date)  {
+            key = bin;
+            return false;
+        }
+        return true;
+    })
+
 	const speaker = d.speaker;
 	if (speakers[speaker] === undefined) {
 		speakers[speaker] = {
@@ -63,21 +75,21 @@ speechData.forEach(d => {
             groupedSpeeches : {}
 		};
 		speakers[speaker].speeches.push(d);
-        speakers[speaker].groupedSpeeches[speechYear] = {};
-        speakers[speaker].groupedSpeeches[speechYear].speeches = [];
-        speakers[speaker].groupedSpeeches[speechYear].speeches.push(d);
+        speakers[speaker].groupedSpeeches[key] = {};
+        speakers[speaker].groupedSpeeches[key].speeches = [];
+        speakers[speaker].groupedSpeeches[key].speeches.push(d);
 	}
 	else {
 		speakers[speaker].startDate = speakers[speaker].startDate < d.date ? speakers[speaker].startDate : d.date;
 		speakers[speaker].endDate = speakers[speaker].endDate > d.date ? speakers[speaker].endDate : d.date;
 		speakers[speaker].speeches.push(d);
-        if (speakers[speaker].groupedSpeeches[speechYear] === undefined) {
-            speakers[speaker].groupedSpeeches[speechYear] = {};
-            speakers[speaker].groupedSpeeches[speechYear].speeches = [];
-            speakers[speaker].groupedSpeeches[speechYear].speeches.push(d);
+        if (speakers[speaker].groupedSpeeches[key] === undefined) {
+            speakers[speaker].groupedSpeeches[key] = {};
+            speakers[speaker].groupedSpeeches[key].speeches = [];
+            speakers[speaker].groupedSpeeches[key].speeches.push(d);
         }
         else {
-            speakers[speaker].groupedSpeeches[speechYear].speeches.push(d);
+            speakers[speaker].groupedSpeeches[key].speeches.push(d);
         }
 	}
 });
@@ -98,21 +110,33 @@ const y = d3.scaleTime()
     .range([ height, 0 ]);
 
 let speakerDiff = {};
-let yearDict = {};
+let dateDict = {};
 diffData.forEach(d => {
-    d.date = new Date(d.year, 0);
+    d.record_date = d3.timeParse("%d-%b-%Y")(d.record_date);
     d.mean = Number(d.mean);
     const speaker = d.speaker;
-    
-    const speeches = speakers[speaker].groupedSpeeches[d.year].speeches;
-    const highestDiff = Math.max(...speeches.map(d => d.diff));
-    const highestSpeech = speeches.filter(d => d.diff == highestDiff)[0];
-    d.highestSpeech = highestSpeech;
-    const lowestDiff = Math.min(...speeches.map(d => d.diff));
-    const lowestSpeech = speeches.filter(d => d.diff == lowestDiff)[0];
-    d.lowestSpeech = lowestSpeech;
 
-	if (speakerDiff[speaker] === undefined) { 
+    let key;
+    dateIntervals.every(bin => {
+        if (bin >= d.record_date)  {
+            key = bin;
+            return false;
+        }
+        return true;
+    })
+    d.bin_date = key;
+
+    if (speakers[speaker].groupedSpeeches[key] !== undefined) {
+        const speeches = speakers[speaker].groupedSpeeches[key].speeches;
+        const highestDiff = Math.max(...speeches.map(d => d.diff));
+        const highestSpeech = speeches.filter(d => d.diff == highestDiff)[0];
+        d.highestSpeech = highestSpeech;
+        const lowestDiff = Math.min(...speeches.map(d => d.diff));
+        const lowestSpeech = speeches.filter(d => d.diff == lowestDiff)[0];
+        d.lowestSpeech = lowestSpeech;
+    }
+
+    if (speakerDiff[speaker] === undefined) { 
         speakerDiff[speaker] = [];
         speakerDiff[speaker].push(d);
     }
@@ -120,21 +144,21 @@ diffData.forEach(d => {
         speakerDiff[speaker].push(d);
     }
 
-    if (yearDict[d.year] === undefined) {
+    if (dateDict[key] === undefined) {
 
         d.x = x(d.mean);
 
-        yearDict[d.year] = [];
+        dateDict[key] = [];
         const obj = {
             value : d.x,
             speaker : speaker
         };
-        yearDict[d.year].push(obj);
-        yearDict[d.year].sort(sortByValueDescending);
+        dateDict[key].push(obj);
+        dateDict[key].sort(sortByValueDescending);
     }
     else {
-        
-        yearDict[d.year].reverse().forEach(obj => {
+            
+         dateDict[key].reverse().forEach(obj => {
             if (Math.abs(x(d.mean) - obj.value) <= stopRadius * 2)
                 d.x = obj.value + stopRadius * 2 + 1;
             else
@@ -145,8 +169,8 @@ diffData.forEach(d => {
             value : d.x,
             speaker : speaker
         };
-        yearDict[d.year].push(obj);
-        yearDict[d.year].sort(sortByValueDescending);
+        dateDict[key].push(obj);
+        dateDict[key].sort(sortByValueDescending);
     }
 })
 console.log(speakerDiff);
@@ -250,6 +274,18 @@ pmData.forEach((d, index) => {
         .attr("opacity", .2)
         .attr("transform", "translate(0," + -shadowHeight + ")");
 })
+
+// plot election periods
+visGroup.selectAll("rect")
+    .data(electionData)
+    .join("g")
+	.append("rect")
+	.attr("x", 0)
+	.attr("y", d => y(d.issue_of_writ))
+	.attr("width", width)
+  	.attr("height", d => { return y(d.issue_of_writ) - y(d.polling_day) })
+	.attr("fill", "#2F435A")
+    .attr("opacity", .25);
 
 // plot pm text to pm periods
 visGroup.selectAll("text")
@@ -362,7 +398,7 @@ visGroup.append("defs")
     .attr("stroke", "#dfdfdf")
     .attr("stroke-width", 0.1);
 
-const timelineX = width + (stopRadius * 2 + stopStrokeWidth) * d3.max(Object.values(yearDict).map(d => d.length));
+const timelineX = width + (stopRadius * 2 + stopStrokeWidth) * d3.max(Object.values(dateDict).map(d => d.length));
 const timeline = visGroup.append("g")
     .attr("transform", "translate(" + timelineX + ",0)");
 timeline.append("line")
@@ -384,8 +420,8 @@ timeline.selectAll(".domain").remove();
 timeline.selectAll(".tick").filter((d, i) => i == ticksCount).remove();
 
 // plot circles on timeline
-Object.entries(yearDict).forEach(entry => {
-    const year = new Date(entry[0], 0);
+Object.entries(dateDict).forEach(entry => {
+    const date = new Date(entry[0]);
     timeline.selectAll(".circle")
         .data(entry[1])
         .join("g")
@@ -395,7 +431,7 @@ Object.entries(yearDict).forEach(entry => {
         .attr("stroke", d => metroMapColours[sortedSpeakers.indexOf(d.speaker)])
         .attr("stroke-width", stopStrokeWidth)
         .attr("cx", (d, i) => - i * (stopRadius * 2 + stopStrokeWidth))
-        .attr("cy", y(year))
+        .attr("cy", y(date))
         .attr("r", stopRadius)
         .on("mouseover", function() {
             isButtonHovered = true;
@@ -474,7 +510,7 @@ isCircleHovered = false,
 isCircleClicked = false;
 sortedSpeakers.forEach((speaker, index) => {
 
-	speakerDiff[speaker] = speakerDiff[speaker].sort((a, b) => a.date - b.date);
+	speakerDiff[speaker] = speakerDiff[speaker].sort((a, b) => a.bin_date - b.bin_date);
     const surname = speaker.split(" ")[speaker.split(" ").length - 1];
 
     const pmPath = visGroup.append("g")
@@ -491,24 +527,24 @@ sortedSpeakers.forEach((speaker, index) => {
             .attr("d", d3.line()
                 .curve(d3.curveMonotoneY)
                 .x(d => d.x)
-                .y(d => y(d.date))
+                .y(d => y(d.bin_date))
             );
     else
         pmPath.append("line")
             .attr("stroke", metroMapColours[index])
             .attr("stroke-width", pathStrokeWidth)
             .attr("x1", d => d[0].x)
-	        .attr("y1", d => y(d[0].date) - 15)
+	        .attr("y1", d => y(d[0].bin_date) - 15)
 	        .attr("x2", d => d[0].x)
-	        .attr("y2", d => y(d[0].date) + 15);
+	        .attr("y2", d => y(d[0].bin_date) + 15);
 
     // plot pm face on path
     const latestSpeech = speakerDiff[speaker][speakerDiff[speaker].length - 1],
-    faceX = latestSpeech.mean > maxMean / 2 ? latestSpeech.x + 64 : latestSpeech.x - 55,
-    faceY = y(latestSpeech.date) <= pmImageWidth ? pmImageWidth : y(latestSpeech.date) - 16;
+    faceX = latestSpeech.mean > maxMean / 2 ? latestSpeech.x + 90 : latestSpeech.x - 90,
+    faceY = y(latestSpeech.bin_date) <= pmImageWidth ? pmImageWidth : y(latestSpeech.bin_date) - 6;
     pmPath.append("line")
         .attr("x1", latestSpeech.x)
-        .attr("y1", y(latestSpeech.date))
+        .attr("y1", y(latestSpeech.bin_date))
         .attr("x2", latestSpeech.mean > maxMean / 2 ? faceX - 20 : faceX + 20)
         .attr("y2", faceY - 10)
         .attr("stroke", "black")
@@ -531,7 +567,7 @@ sortedSpeakers.forEach((speaker, index) => {
         .attr("stroke", "black")
         .attr("stroke-width", stopStrokeWidth)
         .attr("cx", d => d.x)
-        .attr("cy", d => y(d.date))
+        .attr("cy", d => y(d.bin_date))
         .attr("r", stopRadius)
         .on("mouseover", function(event, d) {
 
@@ -554,16 +590,17 @@ sortedSpeakers.forEach((speaker, index) => {
                 .style("left", margin.left + timelineX + contentGap * 2)
                 .style("top", contentGap * 2)
                 .style("max-height", height - contentGap * 2);
-			d3.select("#tooltip-text")
-				.html("<b>Speaker:</b> " + speaker + "<br/>" + 
-					"<b>Year:</b> " + d.year + "<br/>" + 
+
+            let tooltipText = "<b>Speaker:</b> " + speaker + "<br/>" + 
+					"<b>Year:</b> " + d.bin_date.toLocaleDateString("en-au", { year:"numeric", month:"short", day:"numeric"}) + "<br/>" + 
 					"<b>Mean Diff: </b>" + d.mean.toFixed(2) + "<br/>" + 
-                    "<b>Speech Snippet Count: </b>" + d.GroupCount + "<br/><br/>" + 
-                    "<b>Highest Diff Speech Snippet (" + d.highestSpeech.diff.toFixed(2) + "): </b>" + "<br/>" + 
+                    "<b>Speech Snippet Count: </b>" + d.GroupCount;
+            if (d.highestSpeech !== undefined)
+                tooltipText += "<br/><br/>" + "<b>Highest Diff Speech Snippet (" + d.highestSpeech.diff.toFixed(2) + "): </b>" + "<br/>" + 
                     d.highestSpeech.text + "<br/><br/>" + 
                     "<b>Lowest Diff Speech Snippet (" + d.lowestSpeech.diff.toFixed(2) + "): </b>" + "<br/>" + 
-                    d.lowestSpeech.text
-                );
+                    d.lowestSpeech.text;
+			d3.select("#tooltip-text").html( tooltipText );
 
             // call out of the tooltip
             const tooltip = d3.select("#tooltip-container")._groups[0][0];
@@ -571,7 +608,7 @@ sortedSpeakers.forEach((speaker, index) => {
                 .attr("class", "callout")
                 .attr("id", surname + "-tooltip")
                 .attr("x1", d.x + stopRadius + 1)
-                .attr("y1", y(d.date) - (stopRadius + 1))
+                .attr("y1", y(d.bin_date) - (stopRadius + 1))
                 .attr("x2", tooltip.offsetLeft - tooltipWidth - pmImageWidth / 2)
                 .attr("y2", contentGap * 2)
                 .attr("stroke", "black")
@@ -643,4 +680,8 @@ function cleanPmTooltip(surname) {
 
 function sortByValueDescending(a, b) {
     return b.value - a.value;
+}
+
+function sortByDate(a, b) {
+    return a - b;
 }
