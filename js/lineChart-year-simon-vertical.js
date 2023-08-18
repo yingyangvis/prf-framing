@@ -48,10 +48,10 @@ const speechData = await d3.json("data/with_jensen_garrett_abbott_climate_climat
 const diffData = await d3.csv("data/with_jensen_garrett_abbott_climate_climate_change_pms_curie_2_-1_summary_table_dynamic.csv");
 const electionData = await d3.csv("data/federal_elections.csv");
 const pmData = await d3.csv("data/prime_minister_terms.csv");
+const binData = await d3.csv("data/with_jensen_garrett_abbott_climate_climate_change_pms_curie_2_-1_bin_edges.csv");
 
 // process data
-let dateIntervals = [...new Set(diffData.map(d => d.record_date))];
-dateIntervals = dateIntervals.map(d => d3.timeParse("%d-%b-%Y")(d)).sort(sortByDate);
+let dateIntervals = binData.map(d => d3.timeParse("%d-%b-%Y")(d.bin_end)).sort((a, b) => a - b);
 
 let speakers = {};
 speechData.forEach(d => {
@@ -99,7 +99,7 @@ const sortedSpeakers = Object.entries(speakers)
 console.log(speakers);
 
 //// define scales here to determine stop overlaps
-const maxMean = d3.max(diffData, d => d.mean);
+const maxMean = d3.max(diffData, d => d.median );
 const x = d3.scaleLinear()
     .domain([ -maxMean, maxMean ])
     .range([ 0, width ]);
@@ -113,7 +113,7 @@ let speakerDiff = {};
 let dateDict = {};
 diffData.forEach(d => {
     d.record_date = d3.timeParse("%d-%b-%Y")(d.record_date);
-    d.mean = Number(d.mean);
+    d.median = Number(d.median);
     const speaker = d.speaker;
 
     let key;
@@ -127,13 +127,22 @@ diffData.forEach(d => {
     d.bin_date = key;
 
     if (speakers[speaker].groupedSpeeches[key] !== undefined) {
-        const speeches = speakers[speaker].groupedSpeeches[key].speeches;
-        const highestDiff = Math.max(...speeches.map(d => d.diff));
-        const highestSpeech = speeches.filter(d => d.diff == highestDiff)[0];
-        d.highestSpeech = highestSpeech;
-        const lowestDiff = Math.min(...speeches.map(d => d.diff));
-        const lowestSpeech = speeches.filter(d => d.diff == lowestDiff)[0];
-        d.lowestSpeech = lowestSpeech;
+
+        const speechCount = speakers[speaker].groupedSpeeches[key].speeches.length;
+        const middleIndex =  Math.floor(speakers[speaker].groupedSpeeches[key].speeches.length / 2) - 1;
+
+        if(speechCount <= 5) {
+            d.representativeSpeechs = [speakers[speaker].groupedSpeeches[key].speeches[middleIndex]];
+        }
+        else if (speechCount <= 10) {
+            d.representativeSpeechs = [speakers[speaker].groupedSpeeches[key].speeches[middleIndex]];
+            d.representativeSpeechs.push(speakers[speaker].groupedSpeeches[key].speeches[middleIndex + 1]);
+        }
+        else {
+            d.representativeSpeechs = [speakers[speaker].groupedSpeeches[key].speeches[middleIndex - 1]];
+            d.representativeSpeechs.push(speakers[speaker].groupedSpeeches[key].speeches[middleIndex]);
+            d.representativeSpeechs.push(speakers[speaker].groupedSpeeches[key].speeches[middleIndex + 1]);
+        }
     }
 
     if (speakerDiff[speaker] === undefined) { 
@@ -146,7 +155,7 @@ diffData.forEach(d => {
 
     if (dateDict[key] === undefined) {
 
-        d.x = x(d.mean);
+        d.x = x(d.median);
 
         dateDict[key] = [];
         const obj = {
@@ -154,15 +163,14 @@ diffData.forEach(d => {
             speaker : speaker
         };
         dateDict[key].push(obj);
-        dateDict[key].sort(sortByValueDescending);
     }
     else {
             
-         dateDict[key].reverse().forEach(obj => {
-            if (Math.abs(x(d.mean) - obj.value) <= stopRadius * 2)
+        dateDict[key].reverse().forEach(obj => {
+            if (Math.abs(x(d.median) - obj.value) <= stopRadius * 2)
                 d.x = obj.value + stopRadius * 2 + 1;
             else
-                d.x = x(d.mean);
+                d.x = x(d.median);
         })
 
         const obj = {
@@ -170,7 +178,7 @@ diffData.forEach(d => {
             speaker : speaker
         };
         dateDict[key].push(obj);
-        dateDict[key].sort(sortByValueDescending);
+        dateDict[key].sort((a, b) => { return b.value - a.value; });
     }
 })
 console.log(speakerDiff);
@@ -299,10 +307,10 @@ visGroup.selectAll("text")
     .attr("text-anchor", "end");
 
 // plot quantile lines for diff values
-const minMean = d3.min(diffData, d => d.mean),
-medianMean = d3.median(diffData, d => d.mean),
-quantileMeanFirst = d3.quantile(diffData, 0.25, d => d.mean),
-quantileMeanThird = d3.quantile(diffData, 0.75, d => d.mean);
+const minMean = d3.min(diffData, d => d.median),
+medianMean = d3.median(diffData, d => d.median),
+quantileMeanFirst = d3.quantile(diffData, 0.25, d => d.median),
+quantileMeanThird = d3.quantile(diffData, 0.75, d => d.median);
 
 const quantileLines = visGroup.append("g")
     .attr("transform", "translate(" + -width / 4 + ",0)");
@@ -507,7 +515,8 @@ arrowGroup.append("text")
 // plot line chart
 let prevStop,
 isCircleHovered = false,
-isCircleClicked = false;
+isCircleClicked = false,
+faceDict = {};
 sortedSpeakers.forEach((speaker, index) => {
 
 	speakerDiff[speaker] = speakerDiff[speaker].sort((a, b) => a.bin_date - b.bin_date);
@@ -539,13 +548,27 @@ sortedSpeakers.forEach((speaker, index) => {
 	        .attr("y2", d => y(d[0].bin_date) + 15);
 
     // plot pm face on path
-    const latestSpeech = speakerDiff[speaker][speakerDiff[speaker].length - 1],
-    faceX = latestSpeech.mean > maxMean / 2 ? latestSpeech.x + 90 : latestSpeech.x - 90,
-    faceY = y(latestSpeech.bin_date) <= pmImageWidth ? pmImageWidth : y(latestSpeech.bin_date) - 6;
+    const latestSpeech = speakerDiff[speaker][speakerDiff[speaker].length - 1];
+
+    let faceX = latestSpeech.median > maxMean / 2 ? latestSpeech.x + 80 : latestSpeech.x - 80;
+    if (faceDict[latestSpeech.bin_date] === undefined) {
+        faceDict[latestSpeech.bin_date] = [];
+        faceDict[latestSpeech.bin_date].push(faceX);
+    }
+    else {
+        faceDict[latestSpeech.bin_date].reverse().forEach(face => {
+            if (Math.abs(face - faceX) <= pmImageWidth)
+                faceX = latestSpeech.median > maxMean / 2 ? face + pmImageWidth : face - pmImageWidth;
+        })
+        faceDict[latestSpeech.bin_date].push(faceX);
+    }
+
+    const faceY = y(latestSpeech.bin_date) <= pmImageWidth ? pmImageWidth : y(latestSpeech.bin_date) - 6;
+    
     pmPath.append("line")
         .attr("x1", latestSpeech.x)
         .attr("y1", y(latestSpeech.bin_date))
-        .attr("x2", latestSpeech.mean > maxMean / 2 ? faceX - 20 : faceX + 20)
+        .attr("x2", latestSpeech.median > maxMean / 2 ? faceX - 20 : faceX + 20)
         .attr("y2", faceY - 10)
         .attr("stroke", "black")
         .style("stroke-dasharray", ("3,3"));
@@ -593,13 +616,20 @@ sortedSpeakers.forEach((speaker, index) => {
 
             let tooltipText = "<b>Speaker:</b> " + speaker + "<br/>" + 
 					"<b>Date:</b> " + d.bin_date.toLocaleDateString("en-au", { year:"numeric", month:"short", day:"numeric"}) + "<br/>" + 
-					"<b>Mean Diff: </b>" + d.mean.toFixed(2) + "<br/>" + 
-                    "<b>Speech Snippet Count: </b>" + d.GroupCount;
-            if (d.highestSpeech !== undefined)
-                tooltipText += "<br/><br/>" + "<b>Highest Diff Speech Snippet (" + d.highestSpeech.diff.toFixed(2) + "): </b>" + "<br/>" + 
-                    d.highestSpeech.text + "<br/><br/>" + 
-                    "<b>Lowest Diff Speech Snippet (" + d.lowestSpeech.diff.toFixed(2) + "): </b>" + "<br/>" + 
-                    d.lowestSpeech.text;
+                    "<b>Speech Snippet Count: </b>" + d.GroupCount  + "<br/>" +
+					"<b>Snippet Median Diff: </b>" + d.median.toFixed(2);
+            if (d.representativeSpeechs !== undefined) {
+                if (d.representativeSpeechs.length == 1) {
+                    tooltipText += "<br/><br/> <b>Representative Speech Snippet: </b> <br/>" + d.representativeSpeechs[0].text;
+                }
+                else {
+                    tooltipText += "<br/><br/> <b>Representative Speech Snippets: </b>";
+                    d.representativeSpeechs.forEach((speech, index) => {
+                        if (index != 0) tooltipText += "<br/><br/> --------";
+                        tooltipText += "<br/><br/>" + speech.text;
+                    })
+                }
+            }
 			d3.select("#tooltip-text").html( tooltipText );
 
             // call out of the tooltip
@@ -676,12 +706,4 @@ function cleanPmTooltip(surname) {
     d3.selectAll("#" + surname + "-tooltip").remove();
     if (d3.selectAll("#" + surname + "-face")._groups[0].length > 0) isCircleClicked = false;
     d3.selectAll("#" + surname + "-face").remove();
-}
-
-function sortByValueDescending(a, b) {
-    return b.value - a.value;
-}
-
-function sortByDate(a, b) {
-    return a - b;
 }
