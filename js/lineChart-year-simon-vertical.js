@@ -441,11 +441,20 @@ Object.entries(dateDict).forEach(entry => {
         .attr("cx", (d, i) => - i * (stopRadius * 2 + stopStrokeWidth))
         .attr("cy", y(date))
         .attr("r", stopRadius)
-        .on("mouseover", function() {
+        .on("mouseover", function(event, d) {
             isButtonHovered = true;
+
+            d3.select("#nametag-container")
+                .style("display", "block")
+                .style("left", margin.left + timelineX + Number(this.getAttribute("cx")))
+                .style("top", Number(this.getAttribute("cy")) - stopRadius * 2);
+            d3.select("#nametag-text")
+                .html( d.speaker.split(" ")[d.speaker.split(" ").length - 1] );
         })
         .on("mouseout", function() {
             isButtonHovered = false;
+
+            d3.select("#nametag-container").style("display", "none");
         })
         .on("click", function(event, d) {
             const surname = d.speaker.split(" ")[d.speaker.split(" ").length - 1];
@@ -509,7 +518,7 @@ arrowGroup.append("text")
 	.attr("class", "label")
 	.attr("x", width / 8)
     .attr("y", 40)
-	.text("More Climate Science Avocacy")
+	.text("More Climate Science Advocacy")
     .attr("text-anchor", "start");
 
 // plot line chart
@@ -675,7 +684,7 @@ svg.on("click", function() {
 
 // initial vis only shows some pms
 Object.keys(pmNameMatching).forEach(surname => {
-    if (!["Albanese", "Abbott", "Morrison", "Jensen", "Garrett"].includes(surname)) hideAPath(surname);
+    if (!["Albanese", "Morrison", "Jensen", "Garrett"].includes(surname)) hideAPath(surname);
 })
 
 function showAPath(surname) {

@@ -33,3 +33,16 @@
 #tooltip-text {
     font: 16px sans-serif;
 }
+
+#nametag-container {
+    position: absolute;
+    background-color: white;
+    padding: 1px 4px 1px 4px;
+    display: none;
+    border: 1px solid #555;
+    overflow-y: auto;
+}
+#nametag-text {
+    margin: 0px 0px 0px 0px;
+    font: 14px sans-serif;
+}
