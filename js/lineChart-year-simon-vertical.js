@@ -626,7 +626,7 @@ sortedSpeakers.forEach((speaker, index) => {
             let tooltipText = "<b>Speaker:</b> " + speaker + "<br/>" + 
 					"<b>Date:</b> " + d.bin_date.toLocaleDateString("en-au", { year:"numeric", month:"short", day:"numeric"}) + "<br/>" + 
                     "<b>Speech Snippet Count: </b>" + d.GroupCount  + "<br/>" +
-					"<b>Snippet Median Diff: </b>" + d.median.toFixed(2);
+					"<b>Snippet Median Framing: </b>" + d.median.toFixed(2);
             if (d.representativeSpeechs !== undefined) {
                 if (d.representativeSpeechs.length == 1) {
                     tooltipText += "<br/><br/> <b>Representative Speech Snippet: </b> <br/>" + d.representativeSpeechs[0].text;
