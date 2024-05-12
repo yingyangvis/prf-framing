@@ -53,6 +53,8 @@ const binData = await d3.csv("data/results_speaker_affil_filtered_chars150to1200
 
 // process data
 let dateIntervals = binData.map(d => d3.timeParse("%d-%b-%Y")(d.bin_end)).sort((a, b) => a - b);
+let dateBins = {};
+binData.forEach(d => { dateBins[d.bin_centre] = d3.timeParse("%d-%b-%Y")(d.bin_start); });
 
 let speakers = {};
 speechData.forEach(d => {
@@ -624,7 +626,8 @@ sortedSpeakers.forEach((speaker, index) => {
                 .style("max-height", height - contentGap * 2);
 
             let tooltipText = "<b>Speaker:</b> " + speaker + "<br/>" +
-                "<b>Date:</b> " + d.bin_date.toLocaleDateString("en-au", { year: "numeric", month: "short", day: "numeric" }) + "<br/>" +
+                "<b>Period:</b> " + dateBins[d.plot_date].toLocaleDateString("en-au", { year: "numeric", month: "short", day: "numeric" }) + " - "
+                + d.bin_date.toLocaleDateString("en-au", { year: "numeric", month: "short", day: "numeric" }) + "<br/>" +
                 "<b>Speech Snippet Count: </b>" + d.GroupCount + "<br/>" +
                 "<b>Snippet Median Framing: </b>" + d.median.toFixed(2);
             if (d.representativeSpeechs !== undefined) {
